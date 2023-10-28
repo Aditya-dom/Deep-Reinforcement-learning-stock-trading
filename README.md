@@ -1,5 +1,5 @@
 # Deep-Reinforcement-learning-stock-trading
-This project is done for the learning purposes Summer. The idea is to investigate various algorithms of Reinforcement Learning to the domain of Stock Trading. 
+This project is done for the learning purposes autumn. The idea is to investigate various algorithms of Reinforcement Learning to the domain of Stock Trading. 
 
 As part of learning, I have read around 10-15 research papers covering a lot of major and minor aspects of Deep Learning and Reinforcement Learning. We explored OpenAI Gym to gain insights into how to setup our stock trading environment. 
 

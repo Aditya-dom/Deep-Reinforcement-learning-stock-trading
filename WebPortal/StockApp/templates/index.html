@@ -1,0 +1,362 @@
+<!DOCTYPE html>
+<html>
+<head>
+	<title>StockApp</title>
+	<meta name="viewport" content="width=device-width, initial-scale=1">
+	<link rel="stylesheet" href="https://maxcdn.bootstrapcdn.com/bootstrap/4.4.1/css/bootstrap.min.css">
+	<link href="https://fonts.googleapis.com/css2?family=MuseoModerno:wght@500&display=swap" rel="stylesheet">
+	<script src="https://ajax.googleapis.com/ajax/libs/jquery/3.4.1/jquery.min.js"></script>
+	<script src="https://cdnjs.cloudflare.com/ajax/libs/popper.js/1.16.0/umd/popper.min.js"></script>
+	<script src="https://maxcdn.bootstrapcdn.com/bootstrap/4.4.1/js/bootstrap.min.js"></script>
+	<link rel="stylesheet" href="https://use.fontawesome.com/releases/v5.7.0/css/all.css" integrity="sha384-lZN37f5QGtY3VHgisS14W3ExzMWZxybE1SJSEsQp9S+oqd12jhcu+A56Ebc1zFSJ" crossorigin="anonymous">
+	<script src="https://canvasjs.com/assets/script/canvasjs.min.js"></script>
+	{% load static %}
+	
+	<script>
+		var t;
+		var timerset = false;
+		$(document).ready(function () {
+			$("form").on("submit", function (e) {
+				if (timerset) {
+					clearInterval(t);
+					timerset = false;
+				}
+
+				e.preventDefault();
+
+				// if ($("#upload_file")[0].files.length > 2) {
+				// 	alert("You can upload upto 2 files only");
+				// 	return;
+				// }
+
+				var url = "{% url 'fileupload' %}";
+				var data = new FormData();
+				$.each($("#upload_file")[0].files, function(i, file) {
+					data.append("files", file);
+				});
+				data.append("capital", $("#capital").val());
+				data.append("agentType", parseInt($("input[name='agenttype']:checked").val()));
+				data.append("stocks", $("#stocksNum").val());
+				data.append("csrfmiddlewaretoken", '{{ csrf_token }}');
+
+				$.ajax({
+					url: url,
+					data: data,
+					cache: false,
+					contentType: false,
+					processData: false,
+					type: 'post',
+					beforeSend: function() {
+						$(".modal-title").html("Uploading...");
+						$("#modal-progress").modal("show");
+					},
+					success: function (data) {
+						if (data.valid) {
+							$(".modal-title").html("Trading...");
+							t = setInterval(checkProgress, 1000);
+							timerset = true;
+						}
+						else {
+							$("#modal-progress").modal("hide");
+							alert("Your input file(s) are invalid. Please try again.");
+						}
+					},
+					error: function () {
+						$("#modal-progress").modal("hide");
+						alert("Some error occurred. Please check your internet connection and try again.");
+					}
+				});
+			});
+		});
+
+		function checkProgress() {
+			$.ajax({
+				url: "{% url 'checkprogress' %}",
+				data: {},
+				cache: false,
+				contentType: false,
+				processData: false,
+				type: 'get',
+				success: function (data) {
+					if (data.valid) {
+						if (data.progress == 100) {
+							clearInterval(t);
+							timerset = false;
+							$("#modal-progress").modal("hide");
+							plotGraphs(data.graph_data);
+						}
+					}
+					else {
+						if (timerset) {
+							clearInterval(t);
+							timerset = false;
+						}
+					}
+				}
+			});
+		}
+
+		function plotGraphs(graph_data) {
+			$("#profit").css("display", "block");
+			datapoints = [];
+			for (p of graph_data[0]) {
+				datapoints[datapoints.length] = {x : p[0], y : p[1]};
+			}
+
+			var chart1 = new CanvasJS.Chart("profit", {
+				title: {
+					text: "Profit Gained"
+				},
+				axisX: {
+					title: "Time"
+				},
+				axisY: {
+					title: "Profit",
+					prefix: "$",
+					suffix: "K"
+				},
+				toolTip: {
+					shared: true
+				},
+				height: 400,
+				legend: {
+					cursor: "pointer",
+					verticalAlign: "top",
+					horizontalAlign: "center",
+					dockInsidePlotArea: true,
+					// itemclick: toggleDataSeries
+				},
+				data: [{
+					type:"line",
+					name: "Profit",
+					// showInLegend: true,
+					markerSize: 0,
+					yValueFormatString: "$#,###k",
+					dataPoints: datapoints
+				}]
+			});
+			chart1.render();
+
+			$("#stocks").css("display", "block");
+
+			datalist = [];
+			var i = 1;
+			for (list of graph_data[1]) {
+				datapoints = [];
+				for (p of list) {
+					datapoints[datapoints.length] = {x : p[0], y : p[1]};
+				}
+				datalist[datalist.length] = {type:"line", name: "Stock "+i, showInLegend: true, markerSize: 0, yValueFormatString: "#,###", dataPoints: datapoints};
+				i++;
+			}
+
+			var chart2 = new CanvasJS.Chart("stocks", {
+				title: {
+					text: "Stocks Bought"
+				},
+				axisX: {
+					title: "Time"
+				},
+				axisY: {
+					title: "Quantity"
+				},
+				height: 400,
+				toolTip: {
+					shared: true
+				},
+				legend: {
+					cursor: "pointer",
+					verticalAlign: "top",
+					horizontalAlign: "center",
+					// dockInsidePlotArea: true,
+					itemclick: function (e) {
+						if (typeof(e.dataSeries.visible) === "undefined" || e.dataSeries.visible) {
+							e.dataSeries.visible = false;
+						}
+						else {
+							e.dataSeries.visible = true;
+						}
+						chart2.render();
+					}
+				},
+				data: datalist
+			});
+			chart2.render();
+
+			$("#actions").css("display", "block");
+
+			datalist2 = [];
+			i = 1;
+			for (list of graph_data[2]) {
+				datapoints3 = [];
+				for (p of list) {
+					datapoints3[datapoints3.length] = {x : p[0], y : p[1]};
+				}
+				datalist2[datalist2.length] = {type:"line", name: "Action "+i, showInLegend: true, markerSize: 0, dataPoints: datapoints3};
+				i++;
+			}
+
+			var chart3 = new CanvasJS.Chart("actions", {
+				title: {
+					text: "Actions Taken"
+				},
+				axisX: {
+					title: "Time"
+				},
+				axisY: {
+					title: "Action",
+					maximum: 1,
+					minimum: -1
+				},
+				height: 400,
+				toolTip: {
+					shared: true
+				},
+				legend: {
+					cursor: "pointer",
+					verticalAlign: "top",
+					horizontalAlign: "center",
+					// dockInsidePlotArea: true,
+					itemclick: function (e) {
+						if (typeof(e.dataSeries.visible) === "undefined" || e.dataSeries.visible) {
+							e.dataSeries.visible = false;
+						}
+						else {
+							e.dataSeries.visible = true;
+						}
+						chart3.render();
+					}
+				},
+				data: datalist2
+			});
+			chart3.render();
+		}
+		function addDisable () {
+			$('#stocksNum').attr('disabled', 'true');
+			$('#upload_file').attr('multiple', 'true');
+		}
+		function removeDisable () {
+			$('#stocksNum').removeAttr('disabled');
+			$('#upload_file').removeAttr('multiple');
+			if($("#upload_file")[0].files.length > 1) {
+				$('#upload_file').val('');
+			}
+		}
+	</script>
+
+	<style>
+		body {
+			padding: 0;
+		}
+		#formwrapper {
+			box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
+			background-color: #fff;
+			padding : 20px;
+			border-radius: 10px;
+		}
+		.graph {
+			position: relative;
+			padding : 20px;
+			display: none;
+			height : 440px;
+			width: 100%;
+			background-color: #fff;
+			border-radius: 20px;
+			margin: 10px;
+			box-shadow: 0 4px 8px 0 rgba(0, 0, 0, 0.2), 0 6px 20px 0 rgba(0, 0, 0, 0.19);
+		}
+		#heading {
+			position: relative;
+			width: 100%;
+			margin: 0;
+			padding : 10px;
+			background-color: #ff9900;
+			color: #fff;
+			font-family: 'MuseoModerno', cursive;
+		}
+		#particles-js {
+			position: fixed;
+			width: 100%;
+			height: 100%;
+			background-color: #b61924;
+			background-image: url("");
+			background-repeat: no-repeat;
+			background-size: cover;
+			background-position: 50% 50%;
+		}
+		.canvasjs-chart-canvas {
+			width: 100%;
+		}
+	</style>
+</head>
+<body>
+	<div id="particles-js">
+	</div>
+	
+	<div id = "heading"><h1 align="center">Stock Trading Agent</h1></div>
+	<br/>
+	<div class="container">
+		<div class="row align-items-center">
+			<div id = "formwrapper" class="col-sm-6 mx-auto">
+				<form enctype="multipart/form-data">
+					<div class="form-group">
+						<label><b>Upload file(s) in csv format</b></label><br/>
+						<input type="file" id="upload_file" name="csvfile" required="true" multiple>
+					</div>
+					<hr/>
+					<div class="form-group">
+						<label><b>Initial capital</b> (in the same currency as stocks)</label><br/>
+						<input type="number" min = "1" id="capital" name="capital" required="true">
+					</div>
+					<hr/>
+					<div class="form-group">
+						<b>Select Agent type</b>
+						<div class = "container">
+							<div class = "row">
+								<div class = "col"><label><input type="radio" name="agenttype" onclick="addDisable()" value="0" checked>DDPG Multi Stock</label></div>
+								<div class = "col"><label><input type="radio" name="agenttype" onclick="removeDisable()" value="1">DDPG Single Stock</label></div>
+							</div>
+							<div class = "row">
+								<div class = "col"><label><input type="radio" name="agenttype" onclick="removeDisable()" value="2">DDQN Single Stock</label></div>
+								<!-- <div class = "col"><label><input type="radio" name="agenttype" onclick="removeDisable()" value="3">DRQN Single Stock</label></div> -->
+							</div>
+						</div>
+					</div>
+					<hr/>
+					<div class="form-group">
+						<label><b>Initial number of stocks</b></label><br/>
+						<input type="number" min = "0" id="stocksNum" name="stocks" required="true" disabled>
+					</div>
+
+					<button id = "trade" class="btn btn-primary">Trade</button>
+				</form>
+				
+			</div>
+			
+		</div>
+
+		<div class="modal" id="modal-progress" data-backdrop="static" data-keyboard="false">
+			<div class="modal-dialog">
+				<div class="modal-content">
+					<div class="modal-header">
+						<h4 class="modal-title">Uploading...</h4>
+					</div>
+					<div class="modal-body">
+						<div class="progress">
+							<div class="progress-bar progress-bar-striped progress-bar-animated" style="width:100%">Please wait</div>
+						</div>
+					</div>
+				</div>
+			</div>
+		</div>
+		<br/>
+		<center>
+			<div class = "graph" id="profit"></div>
+			<div class = "graph" id="stocks"></div>
+			<div class = "graph" id="actions"></div>
+		</center>
+	</div>
+	<script src="{% static 'js/particles.js' %}"></script>
+	<script src="{% static 'js/app.js' %}"></script>
+</body>
+</html>
